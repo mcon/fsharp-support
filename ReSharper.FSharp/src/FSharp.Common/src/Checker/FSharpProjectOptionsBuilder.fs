@@ -101,7 +101,7 @@ type FSharpProjectOptionsBuilder
         | _ -> "library"
 
     abstract GetProjectItemsPaths:
-        project: IProject * targetFrameworkId: TargetFrameworkId -> (FileSystemPath * BuildAction)[]
+        project: IProject * targetFrameworkId: TargetFrameworkId -> (FileSystemPath * BuildAction) seq
 
     default x.GetProjectItemsPaths(project, targetFrameworkId) =
         let projectMark = project.GetProjectMark().NotNull()

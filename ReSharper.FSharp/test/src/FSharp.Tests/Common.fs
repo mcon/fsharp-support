@@ -56,7 +56,7 @@ type FSharpScriptTestAttribute() =
 type FSharpTestProjectOptionsBuilder(checkerService, logger) =
     inherit FSharpProjectOptionsBuilder(checkerService, logger, Mock<_>().Object)
 
-    override x.GetProjectItemsPaths(_, _) = [||]
+    override x.GetProjectItemsPaths(_, _) = Seq.empty
 
     interface IHideImplementation<IFSharpProjectOptionsBuilder>
 

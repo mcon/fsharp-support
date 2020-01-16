@@ -328,7 +328,19 @@ type FSharpItemsContainer
         member x.GetProjectItemsPaths(projectMark, targetFrameworkId) =
             tryGetProjectMapping projectMark
             |> Option.map (fun mapping -> mapping.GetProjectItemsPaths(targetFrameworkId))
-            |> Option.defaultValue [| |]
+            |> Option.defaultValue Seq.empty
+
+        member x.GetChildProjectItems(viewItem) =
+            let p = viewItem.ProjectItem.GetProject()
+            tryGetProjectMark viewItem.ProjectItem
+            |> Option.bind tryGetProjectMapping
+            |> Option.bind (fun mapping ->
+                tryGetProjectItem viewItem
+                |> Option.map (fun projectItem ->
+                    mapping.GetChildProjectItems(projectItem)
+                    |> Seq.map (fun (i: FSharpProjectItem) ->
+                        p.FindProjectItemsByLocation(i.PhysicalPath).FirstOrDefault())))
+            |> Option.defaultValue Seq.empty
 
 type IFSharpItemsContainer =
     inherit IMsBuildProjectListener
@@ -337,7 +349,8 @@ type IFSharpItemsContainer =
     abstract member TryGetSortKey: FSharpViewItem -> int option
     abstract member TryGetParentFolderIdentity: FSharpViewItem -> FSharpViewFolderIdentity option
     abstract member CreateFoldersWithParents: IProjectFolder -> (FSharpViewItem * FSharpViewItem option) seq
-    abstract member GetProjectItemsPaths: IProjectMark * TargetFrameworkId -> (FileSystemPath * BuildAction)[]
+    abstract member GetProjectItemsPaths: IProjectMark * TargetFrameworkId -> (FileSystemPath * BuildAction) seq
+    abstract member GetChildProjectItems: FSharpViewItem -> IProjectItem seq
     abstract member Dump: TextWriter -> unit
 
     abstract member TryGetRelativeChildPath:
@@ -707,12 +720,34 @@ type ProjectMapping(projectDirectory, projectUniqueName, targetFrameworkIds: ISe
 
         ItemInfo.Create(path, logicalPath, parent, sortKey)
 
-    let iter f =
-        let rec iter (parent: FSharpProjectModelElement) =
-            for item in getChildrenSorted parent do
-                f item
-                iter (ProjectItem item)
-        iter project
+    let collectChildren (transform: FSharpProjectItem -> 'T seq) (parent: FSharpProjectModelElement): 'T seq =
+        getChildrenSorted parent
+        |> Seq.collect transform
+
+    let rec collectChildrenFiles f (parent: FSharpProjectModelElement) =
+        let rec iter child =
+            match child with
+            | FileItem _ -> f child
+            | _ -> collectChildren iter (ProjectItem child)
+
+        collectChildren iter parent
+
+    let collectProjectFiles f =
+        collectChildrenFiles f project
+
+    let isLeafProjectItem item =
+        match item with
+        | FileItem _ | EmptyFolder _ -> true
+        | _ -> false
+
+    let isFileItem item =
+        match item with
+        | FileItem _ -> true
+        | _ -> false
+    
+    let rec collectLeafChildren item =
+        if isLeafProjectItem item then Seq.singleton item else
+        collectChildren collectLeafChildren (ProjectItem item)
 
     member x.Update(items) =
         let folders = Stack()
@@ -782,7 +817,8 @@ type ProjectMapping(projectDirectory, projectUniqueName, targetFrameworkIds: ISe
             foldersIds.GetOrCreateValue(el, fun () -> foldersIds.Count)
         foldersIds.[project] <- 0
 
-        iter (fun projectItem ->
+        collectProjectFiles Seq.singleton
+        |> Seq.iter (fun projectItem ->
             let info = projectItem.ItemInfo
             writer.Write(info.PhysicalPath)
             writer.Write(info.LogicalPath)
@@ -935,12 +971,13 @@ type ProjectMapping(projectDirectory, projectUniqueName, targetFrameworkIds: ISe
         | _ -> None
 
     member x.GetProjectItemsPaths(targetFrameworkId) =
-        let result = List()
-        iter (function
+        collectProjectFiles (function
             | FileItem (info, buildAction, ids, _) when ids.Contains(targetFrameworkId) ->
-                result.Add((info.PhysicalPath, buildAction))
-            | _ -> ())
-        result.ToArray()
+                Seq.singleton (info.PhysicalPath, buildAction)
+            | _ -> Seq.empty)
+
+    member x.GetChildProjectItems(projectItem: FSharpProjectItem) =
+        collectLeafChildren projectItem
 
     member x.Dump(writer: TextWriter) =
         let rec dump (parent: FSharpProjectModelElement) ident =
@@ -1225,6 +1262,14 @@ type FSharpItemModificationContextProvider(container: IFSharpItemsContainer) =
             match project.FindProjectItemsByLocation(path).FirstOrDefault() with
             | null -> None
             | item -> Some(OrderingContext(RelativeTo(item, relativeToType))))
+
+    override x.GetModifiableItems(modifiedItems) =
+        match modifiedItems.FirstOrDefault() with
+        | :? FSharpViewItem as modifiedItem ->
+            match modifiedItem with
+            | FSharpViewFolder _ -> container.GetChildProjectItems(modifiedItem)
+            | _ -> null
+        | _ -> null
 
 
 [<ShellComponent>]

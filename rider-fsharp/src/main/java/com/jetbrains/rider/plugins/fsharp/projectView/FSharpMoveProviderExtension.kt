@@ -29,12 +29,10 @@ class FSharpMoveProviderExtension(project: Project) : MoveProviderExtension(proj
     }
 
     override fun allowPaste(nodes: Collection<ProjectModelNode>, relativeTo: IProjectModelNode, orderType: ActionOrderType): Boolean {
-        if (nodes.any { it.isProjectFolder() && it.containingProject()?.getVirtualFile()?.extension == "fsproj" })
-            return false
+        // todo: don't allow moving items inside wildcard imports
 
-        if (orderType == ActionOrderType.None) {
+        if (orderType == ActionOrderType.None)
             return super.allowPaste(nodes, relativeTo, orderType)
-        }
 
         if (relativeTo is ProjectModelNode && isFSharpNode(relativeTo)) {
             val nodesItemType = getNodesItemType(nodes)
