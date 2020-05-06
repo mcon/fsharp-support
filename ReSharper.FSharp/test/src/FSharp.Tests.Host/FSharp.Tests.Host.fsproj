@@ -13,9 +13,12 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Core" Version="$(FSharpCoreVersion)" />
-    <PackageReference Include="JetBrains.FSharp.Compiler.Service" Version="$(FSharpCompilerServiceVersion)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\fsharp\fcs\FSharp.Compiler.Service\FSharp.Compiler.Service.fsproj" />
+  </ItemGroup>
+  
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\FSharp.Common\FSharp.Common.fsproj" />
   </ItemGroup>

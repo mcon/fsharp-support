@@ -8,7 +8,7 @@ open JetBrains.Util
 [<Extension; Sealed; AbstractClass>]
 type FSharpAttributeUtil =
     [<Extension>]
-    static member GetClrName(attr: FSharpAttribute) = attr.AttributeType.QualifiedBaseName
+    static member GetClrName(attr: FSharpAttribute) = attr.AttributeType.QualifiedName
     
     [<Extension>]
     static member HasAttributeInstance(attrs: IList<FSharpAttribute>, clrName: string) =
